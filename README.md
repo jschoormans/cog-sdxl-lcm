@@ -10,7 +10,12 @@ Follow the [model pushing guide](https://replicate.com/docs/guides/push-a-model)
 
 ## Basic Usage
 
-for prediction,
+Download weights first to apply the LCM-LoRA for SDXL
+```bash
+cog run python script/download_weights.py
+```
+
+Then for predictions,
 
 ```bash
 cog predict -i prompt="a photo of TOK"
