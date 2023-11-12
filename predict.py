@@ -180,6 +180,8 @@ class Predictor(BasePredictor):
             use_safetensors=True,
             variant="fp16",
         )
+        self.txt2img_pipe.load_lora_weights("latent-consistency/lcm-lora-sdxl", cache_dir=LCM_CACHE)
+        self.txt2img_pipe.fuse_lora()
         self.is_lora = False
         if weights or os.path.exists("./trained-model"):
             self.load_trained_weights(weights, self.txt2img_pipe)
@@ -231,7 +233,7 @@ class Predictor(BasePredictor):
         self,
         prompt: str = Input(
             description="Input prompt",
-            default="An astronaut riding a rainbow unicorn",
+            default="An astronaut riding a rainbow unicorn, cinematic, dramatic",
         ),
         negative_prompt: str = Input(
             description="Input Negative Prompt",
@@ -265,7 +267,7 @@ class Predictor(BasePredictor):
             default="LCM",
         ),
         num_inference_steps: int = Input(
-            description="Number of denoising steps", ge=1, le=20, default=4
+            description="Number of denoising steps", ge=1, le=20, default=6
         ),
         guidance_scale: float = Input(
             description="Scale for classifier-free guidance", ge=1, le=20, default=2.0
