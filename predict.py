@@ -313,7 +313,7 @@ class Predictor(BasePredictor):
         print(f"Using seed: {seed}")
 
         if lora_weights:
-            self.load_trained_weights(replicate_weights, self.txt2img_pipe)
+            self.load_trained_weights(lora_weights, self.txt2img_pipe)
         elif replicate_weights:
             self.load_trained_weights(replicate_weights, self.txt2img_pipe)
         
