@@ -239,6 +239,10 @@ class Predictor(BasePredictor):
             description="Input Negative Prompt",
             default="",
         ),
+        batched_prompt: bool = Input(
+            description="When active, your prompt will be split by newlines and images will be generated for each individual line",
+            default=False
+        ),
         image: Path = Input(
             description="Input image for img2img or inpaint mode",
             default=None,
@@ -295,6 +299,10 @@ class Predictor(BasePredictor):
             description="Replicate LoRA weights to use. Leave blank to use the default weights.",
             default=None,
         ),
+        lora_weights: str = Input(
+            description="Replicate LoRA weights to use. Leave blank to use the default weights.",
+            default=None,
+        ),
         disable_safety_checker: bool = Input(
             description="Disable safety checker for generated images. This feature is only available through the API. See [https://replicate.com/docs/how-does-replicate-work#safety](https://replicate.com/docs/how-does-replicate-work#safety)",
             default=False
@@ -305,7 +313,9 @@ class Predictor(BasePredictor):
             seed = int.from_bytes(os.urandom(2), "big")
         print(f"Using seed: {seed}")
 
-        if replicate_weights:
+        if lora_weights:
+            self.load_trained_weights(replicate_weights, self.txt2img_pipe)
+        elif replicate_weights:
             self.load_trained_weights(replicate_weights, self.txt2img_pipe)
         
         # OOMs can leave vae in bad state
@@ -346,12 +356,17 @@ class Predictor(BasePredictor):
         generator = torch.Generator("cuda").manual_seed(seed)
 
         common_args = {
-            "prompt": [prompt] * num_outputs,
-            "negative_prompt": [negative_prompt] * num_outputs,
             "guidance_scale": guidance_scale,
             "generator": generator,
             "num_inference_steps": num_inference_steps,
         }
+
+        if batched_prompt:
+            sdxl_kwargs["prompt"] = prompt.strip().splitlines() * num_outputs
+            sdxl_kwargs["negative_prompt"] = negative_prompt.strip().splitlines() * num_outputs
+        else:
+            sdxl_kwargs["prompt"] =  [prompt] * num_outputs
+            sdxl_kwargs["negative_prompt"] = [negative_prompt] * num_outputs
 
         if self.is_lora:
             sdxl_kwargs["cross_attention_kwargs"] = {"scale": lora_scale}
