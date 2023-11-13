@@ -180,8 +180,7 @@ class Predictor(BasePredictor):
             use_safetensors=True,
             variant="fp16",
         )
-        self.txt2img_pipe.load_lora_weights("latent-consistency/lcm-lora-sdxl", cache_dir=LCM_CACHE)
-        self.txt2img_pipe.fuse_lora()
+
         self.is_lora = False
         if weights or os.path.exists("./trained-model"):
             self.load_trained_weights(weights, self.txt2img_pipe)
