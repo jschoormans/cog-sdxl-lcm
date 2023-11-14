@@ -19,7 +19,9 @@ from diffusers import (
     PNDMScheduler,
     StableDiffusionXLImg2ImgPipeline,
     StableDiffusionXLInpaintPipeline,
+    StableDiffusionXLControlNetPipeline,
     LCMScheduler,
+    ControlNetModel
 )
 from diffusers.models.attention_processor import LoRAAttnProcessor2_0
 from diffusers.pipelines.stable_diffusion.safety_checker import (
@@ -29,7 +31,10 @@ from diffusers.utils import load_image
 from safetensors.torch import load_file
 from transformers import CLIPImageProcessor
 from dataset_and_utils import TokenEmbeddingsHandler
+import cv2
+from Pillow import Image
 
+CONTROL_CACHE = "control-cache"
 SDXL_MODEL_CACHE = "./sdxl-cache"
 LCM_CACHE = "./lcm-cache"
 SAFETY_CACHE = "./safety-cache"
@@ -181,6 +186,8 @@ class Predictor(BasePredictor):
             variant="fp16",
         )
 
+        self.txt2img_pipe.load_lora_weights("latent-consistency/lcm-lora-sdxl", cache_dir=LCM_CACHE)
+        self.txt2img_pipe.fuse_lora()
         self.is_lora = False
         if weights or os.path.exists("./trained-model"):
             self.load_trained_weights(weights, self.txt2img_pipe)
@@ -210,6 +217,20 @@ class Predictor(BasePredictor):
             scheduler=self.txt2img_pipe.scheduler,
         )
         self.inpaint_pipe.to("cuda")
+
+        print("Loading SDXL Controlnet pipeline...")
+        controlnet = ControlNetModel.from_pretrained(
+            CONTROL_CACHE,
+            torch_dtype=torch.float16,
+        )
+        self.controlnet_pipe = StableDiffusionXLControlNetPipeline.from_pretrained(
+            SDXL_MODEL_CACHE,
+            controlnet=controlnet,
+            torch_dtype=torch.float16,
+            use_safetensors=True,
+            variant="fp16",
+        )
+        self.controlnet_pipe.to("cuda")
         print("setup took: ", time.time() - start)
 
     def load_image(self, path):
@@ -226,6 +247,13 @@ class Predictor(BasePredictor):
             clip_input=safety_checker_input.pixel_values.to(torch.float16),
         )
         return image, has_nsfw_concept
+
+    def image2canny(self, image):
+        image = np.array(image)
+        image = cv2.Canny(image, 100, 200)
+        image = image[:, :, None]
+        image = np.concatenate([image, image, image], axis=2)
+        return Image.fromarray(image)
 
     @torch.inference_mode()
     def predict(
@@ -249,6 +277,10 @@ class Predictor(BasePredictor):
         mask: Path = Input(
             description="Input mask for inpaint mode. Black areas will be preserved, white areas will be inpainted.",
             default=None,
+        ),
+        controlnet_image: Path = Input(
+            description="Input image for controlnet, it will be converted to a canny edge image.",
+            default=None
         ),
         width: int = Input(
             description="Width of output image",
@@ -293,6 +325,12 @@ class Predictor(BasePredictor):
             ge=0.0,
             le=1.0,
             default=0.6,
+        ),
+        condition_scale: float = Input(
+            description="The bigger this number is, the more ControlNet interferes",
+            default=0.5,
+            ge=0.0,
+            le=1.0,
         ),
         replicate_weights: str = Input(
             description="Replicate LoRA weights to use. Leave blank to use the default weights.",
@@ -340,6 +378,12 @@ class Predictor(BasePredictor):
             sdxl_kwargs["image"] = self.load_image(image)
             sdxl_kwargs["strength"] = prompt_strength
             pipe = self.img2img_pipe
+        elif controlnet_image:
+            sdxl_kwargs["image"] = self.image2canny(controlnet_image)
+            sdxl_kwargs["controlnet_conditioning_scale"] = condition_scale
+            sdxl_kwargs["width"] = width
+            sdxl_kwargs["height"] = height
+            pipe = self.controlnet_pipe
         else:
             print("txt2img mode")
             sdxl_kwargs["width"] = width

@@ -3,10 +3,12 @@
 # internet, which will take a long time.
 
 import torch
-from diffusers import AutoencoderKL, DiffusionPipeline
+from diffusers import AutoencoderKL, DiffusionPipeline, ControlNetModel
 from diffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker,
 )
+
+CONTROL_CACHE = "control-cache"
 
 better_vae = AutoencoderKL.from_pretrained(
     "madebyollin/sdxl-vae-fp16-fix", torch_dtype=torch.float16
@@ -22,6 +24,12 @@ pipe = DiffusionPipeline.from_pretrained(
 pipe.load_lora_weights("latent-consistency/lcm-lora-sdxl", cache_dir="lcm-cache")
 pipe.fuse_lora()
 pipe.save_pretrained("./sdxl-cache", safe_serialization=True)
+
+controlnet = ControlNetModel.from_pretrained(
+    "diffusers/controlnet-canny-sdxl-1.0",
+    torch_dtype=torch.float16
+)
+controlnet.save_pretrained(CONTROL_CACHE)
 
 
 # safety = StableDiffusionSafetyChecker.from_pretrained(
