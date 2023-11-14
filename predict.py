@@ -230,6 +230,8 @@ class Predictor(BasePredictor):
             use_safetensors=True,
             variant="fp16",
         )
+        self.controlnet_pipe.load_lora_weights("latent-consistency/lcm-lora-sdxl", cache_dir=LCM_CACHE)
+        self.controlnet_pipe.fuse_lora()
         self.controlnet_pipe.to("cuda")
         print("setup took: ", time.time() - start)
 
@@ -351,9 +353,15 @@ class Predictor(BasePredictor):
         print(f"Using seed: {seed}")
 
         if lora_weights:
-            self.load_trained_weights(lora_weights, self.txt2img_pipe)
+            if controlnet_image:
+                self.load_trained_weights(lora_weights, self.controlnet_pipe)
+            else:
+                self.load_trained_weights(lora_weights, self.txt2img_pipe)
         elif replicate_weights:
-            self.load_trained_weights(replicate_weights, self.txt2img_pipe)
+            if controlnet_image:
+                self.load_trained_weights(lora_weights, self.controlnet_pipe)
+            else:
+                self.load_trained_weights(replicate_weights, self.txt2img_pipe)
         
         # OOMs can leave vae in bad state
         if self.txt2img_pipe.vae.dtype == torch.float32:
@@ -379,7 +387,7 @@ class Predictor(BasePredictor):
             sdxl_kwargs["strength"] = prompt_strength
             pipe = self.img2img_pipe
         elif controlnet_image:
-            sdxl_kwargs["image"] = self.image2canny(controlnet_image)
+            sdxl_kwargs["image"] = self.image2canny(self.load_image(controlnet_image))
             sdxl_kwargs["controlnet_conditioning_scale"] = condition_scale
             sdxl_kwargs["width"] = width
             sdxl_kwargs["height"] = height
