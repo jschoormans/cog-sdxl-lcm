@@ -32,7 +32,7 @@ from safetensors.torch import load_file
 from transformers import CLIPImageProcessor
 from dataset_and_utils import TokenEmbeddingsHandler
 import cv2
-from Pillow import Image
+from PIL import Image
 
 CONTROL_CACHE = "control-cache"
 SDXL_MODEL_CACHE = "./sdxl-cache"
