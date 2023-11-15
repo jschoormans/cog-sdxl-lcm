@@ -19,7 +19,7 @@ from diffusers import (
     PNDMScheduler,
     StableDiffusionXLImg2ImgPipeline,
     StableDiffusionXLInpaintPipeline,
-    StableDiffusionXLControlNetPipeline,
+    StableDiffusionXLControlNetImg2ImgPipeline,
     LCMScheduler,
     ControlNetModel
 )
@@ -223,7 +223,7 @@ class Predictor(BasePredictor):
             CONTROL_CACHE,
             torch_dtype=torch.float16,
         )
-        self.controlnet_pipe = StableDiffusionXLControlNetPipeline.from_pretrained(
+        self.controlnet_pipe = StableDiffusionXLControlNetImg2ImgPipeline.from_pretrained(
             SDXL_MODEL_CACHE,
             controlnet=controlnet,
             torch_dtype=torch.float16,
@@ -381,13 +381,20 @@ class Predictor(BasePredictor):
             sdxl_kwargs["width"] = width
             sdxl_kwargs["height"] = height
             pipe = self.inpaint_pipe
+        elif image and controlnet_image:
+            sdxl_kwargs["image"] = self.load_image(image)
+            sdxl_kwargs["control_image"] = self.image2canny(self.load_image(controlnet_image))
+            sdxl_kwargs["controlnet_conditioning_scale"] = condition_scale
+            sdxl_kwargs["width"] = width
+            sdxl_kwargs["height"] = height
+            pipe = self.controlnet_pipe
         elif image:
             print("img2img mode")
             sdxl_kwargs["image"] = self.load_image(image)
             sdxl_kwargs["strength"] = prompt_strength
             pipe = self.img2img_pipe
         elif controlnet_image:
-            sdxl_kwargs["image"] = self.image2canny(self.load_image(controlnet_image))
+            sdxl_kwargs["control_image"] = self.image2canny(self.load_image(controlnet_image))
             sdxl_kwargs["controlnet_conditioning_scale"] = condition_scale
             sdxl_kwargs["width"] = width
             sdxl_kwargs["height"] = height
