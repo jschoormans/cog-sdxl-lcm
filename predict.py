@@ -359,7 +359,7 @@ class Predictor(BasePredictor):
                 self.load_trained_weights(lora_weights, self.txt2img_pipe)
         elif replicate_weights:
             if controlnet_image:
-                self.load_trained_weights(lora_weights, self.controlnet_pipe)
+                self.load_trained_weights(replicate_weights, self.controlnet_pipe)
             else:
                 self.load_trained_weights(replicate_weights, self.txt2img_pipe)
         
