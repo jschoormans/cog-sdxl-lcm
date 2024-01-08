@@ -26,7 +26,7 @@ pipe.fuse_lora()
 pipe.save_pretrained("./sdxl-cache", safe_serialization=True)
 
 controlnet = ControlNetModel.from_pretrained(
-    "diffusers/controlnet-canny-sdxl-1.0",
+    "thibaud/controlnet-openpose-sdxl-1.0",
     torch_dtype=torch.float16,
     use_safetensors=True,
     variant="fp16",
