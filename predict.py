@@ -20,6 +20,7 @@ from diffusers import (
     PNDMScheduler,
     StableDiffusionXLImg2ImgPipeline,
     StableDiffusionXLInpaintPipeline,
+    StableDiffusionXLControlNetInpaintPipeline,
     StableDiffusionXLControlNetImg2ImgPipeline,
     LCMScheduler,
     ControlNetModel
@@ -161,13 +162,10 @@ class Predictor(BasePredictor):
         """Load the model into memory to make running multiple predictions efficient"""
 
         start = time.time()
-        print('openpose start')
         self.openpose = OpenposeDetector.from_pretrained(
             CONTROL_NAME,
             cache_dir=CONTROL_CACHE,
         )
-        print('openpose end')
-
         
         
         self.tuned_model = False
@@ -234,21 +232,21 @@ class Predictor(BasePredictor):
             torch_dtype=torch.float16,
         )
 
-        # self.controlnet_pipe = StableDiffusionXLControlNetInpaintPipeline.from_pretrained(
-        #     SDXL_MODEL_CACHE,
-        #     controlnet=controlnet,
-        #     torch_dtype=torch.float16,
-        #     use_safetensors=True,
-        #     variant="fp16",
-        # )
-
-        self.controlnet_pipe = StableDiffusionXLControlNetImg2ImgPipeline.from_pretrained(
+        self.controlnet_pipe = StableDiffusionXLControlNetInpaintPipeline.from_pretrained(
             SDXL_MODEL_CACHE,
             controlnet=controlnet,
             torch_dtype=torch.float16,
             use_safetensors=True,
             variant="fp16",
         )
+
+        # self.controlnet_pipe = StableDiffusionXLControlNetImg2ImgPipeline.from_pretrained(
+        #     SDXL_MODEL_CACHE,
+        #     controlnet=controlnet,
+        #     torch_dtype=torch.float16,
+        #     use_safetensors=True,
+        #     variant="fp16",
+        # )
         self.controlnet_pipe.load_lora_weights("latent-consistency/lcm-lora-sdxl", cache_dir=LCM_CACHE)
         self.controlnet_pipe.fuse_lora()
         self.controlnet_pipe.to("cuda")
