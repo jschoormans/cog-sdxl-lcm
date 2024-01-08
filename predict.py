@@ -42,7 +42,7 @@ SAFETY_CACHE = "./safety-cache"
 FEATURE_EXTRACTOR = "./feature-extractor"
 SDXL_URL = "https://weights.replicate.delivery/default/sdxl/sdxl-vae-upcast-fix.tar"
 SAFETY_URL = "https://weights.replicate.delivery/default/sdxl/safety-1.0.tar"
-
+CONTROL_NAME="lllyasviel/ControlNet"
 
 class KarrasDPM:
     def from_config(config):

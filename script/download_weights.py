@@ -4,10 +4,7 @@
 
 import torch
 from diffusers import AutoencoderKL, DiffusionPipeline, ControlNetModel
-from diffusers.pipelines.stable_diffusion.safety_checker import (
-    StableDiffusionSafetyChecker,
-)
-
+from diffusers.pipelines.stable_diffusion.safety_checker import StableDiffusionSafetyChecker
 CONTROL_CACHE = "control-cache"
 
 better_vae = AutoencoderKL.from_pretrained(
@@ -27,9 +24,6 @@ pipe.save_pretrained("./sdxl-cache", safe_serialization=True)
 
 controlnet = ControlNetModel.from_pretrained(
     "thibaud/controlnet-openpose-sdxl-1.0",
-    torch_dtype=torch.float16,
-    use_safetensors=True,
-    variant="fp16",
 )
 controlnet.save_pretrained(CONTROL_CACHE)
 
