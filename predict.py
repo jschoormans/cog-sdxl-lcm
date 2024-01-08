@@ -161,11 +161,12 @@ class Predictor(BasePredictor):
         """Load the model into memory to make running multiple predictions efficient"""
 
         start = time.time()
-        
+        print('openpose start')
         self.openpose = OpenposeDetector.from_pretrained(
             CONTROL_NAME,
             cache_dir=CONTROL_CACHE,
         )
+        print('openpose end')
 
         
         
@@ -232,6 +233,15 @@ class Predictor(BasePredictor):
             CONTROL_CACHE,
             torch_dtype=torch.float16,
         )
+
+        # self.controlnet_pipe = StableDiffusionXLControlNetInpaintPipeline.from_pretrained(
+        #     SDXL_MODEL_CACHE,
+        #     controlnet=controlnet,
+        #     torch_dtype=torch.float16,
+        #     use_safetensors=True,
+        #     variant="fp16",
+        # )
+
         self.controlnet_pipe = StableDiffusionXLControlNetImg2ImgPipeline.from_pretrained(
             SDXL_MODEL_CACHE,
             controlnet=controlnet,
@@ -294,7 +304,7 @@ class Predictor(BasePredictor):
             default=None,
         ),
         controlnet_image: Path = Input(
-            description="Input image for controlnet, it will be converted to a canny edge image.",
+            description="Input image for controlnet, it will be converted to a controlnet openpose image.",
             default=None
         ),
         width: int = Input(
@@ -407,11 +417,18 @@ class Predictor(BasePredictor):
             sdxl_kwargs["strength"] = prompt_strength
             pipe = self.img2img_pipe
         elif controlnet_image:
-            sdxl_kwargs["control_image"] = self.openpose(self.load_image(controlnet_image))
+            sdxl_kwargs["control_image"] = [self.openpose(self.load_image(controlnet_image)).resize((width, height))]
+            print(controlnet_image)
+            print(self.load_image(controlnet_image))
+            print(self.openpose(self.load_image(controlnet_image)))
+
+            
             sdxl_kwargs["controlnet_conditioning_scale"] = condition_scale
             sdxl_kwargs["width"] = width
             sdxl_kwargs["height"] = height
+            print('before controlnet pipe')
             pipe = self.controlnet_pipe
+            print('after controlnet pipe')
         else:
             print("txt2img mode")
             sdxl_kwargs["width"] = width

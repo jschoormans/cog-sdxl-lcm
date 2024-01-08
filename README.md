@@ -26,3 +26,8 @@ cog train -i input_images=@example_datasets/__data.zip -i use_face_detection_ins
 ```bash
 cog run -p 5000 python -m cog.server.http
 ```
+
+
+sudo cog predict -i prompt="a photo of TOK" -i controlnet_image=@person.jpg -i image=@person.jpg 
+
+! The pipeline cant have no normale image but a controlnet image!
