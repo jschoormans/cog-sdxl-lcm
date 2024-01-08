@@ -186,46 +186,10 @@ class Predictor(BasePredictor):
         if not os.path.exists(SDXL_MODEL_CACHE):
             download_weights(SDXL_URL, SDXL_MODEL_CACHE)
 
-        print("Loading sdxl txt2img pipeline...")
-        self.txt2img_pipe = DiffusionPipeline.from_pretrained(
-            SDXL_MODEL_CACHE,
-            torch_dtype=torch.float16,
-            use_safetensors=True,
-            variant="fp16",
-        )
-
-        self.txt2img_pipe.load_lora_weights("latent-consistency/lcm-lora-sdxl", cache_dir=LCM_CACHE)
-        self.txt2img_pipe.fuse_lora()
         self.is_lora = False
         if weights or os.path.exists("./trained-model"):
             self.load_trained_weights(weights, self.txt2img_pipe)
-
-        self.txt2img_pipe.to("cuda")
-
-        print("Loading SDXL img2img pipeline...")
-        self.img2img_pipe = StableDiffusionXLImg2ImgPipeline(
-            vae=self.txt2img_pipe.vae,
-            text_encoder=self.txt2img_pipe.text_encoder,
-            text_encoder_2=self.txt2img_pipe.text_encoder_2,
-            tokenizer=self.txt2img_pipe.tokenizer,
-            tokenizer_2=self.txt2img_pipe.tokenizer_2,
-            unet=self.txt2img_pipe.unet,
-            scheduler=self.txt2img_pipe.scheduler,
-        )
-        self.img2img_pipe.to("cuda")
-
-        print("Loading SDXL inpaint pipeline...")
-        self.inpaint_pipe = StableDiffusionXLInpaintPipeline(
-            vae=self.txt2img_pipe.vae,
-            text_encoder=self.txt2img_pipe.text_encoder,
-            text_encoder_2=self.txt2img_pipe.text_encoder_2,
-            tokenizer=self.txt2img_pipe.tokenizer,
-            tokenizer_2=self.txt2img_pipe.tokenizer_2,
-            unet=self.txt2img_pipe.unet,
-            scheduler=self.txt2img_pipe.scheduler,
-        )
-        self.inpaint_pipe.to("cuda")
-
+        
         print("Loading SDXL Controlnet pipeline...")
         controlnet = ControlNetModel.from_pretrained(
             CONTROL_CACHE,
@@ -266,15 +230,6 @@ class Predictor(BasePredictor):
             clip_input=safety_checker_input.pixel_values.to(torch.float16),
         )
         return image, has_nsfw_concept
-
-    def image2canny(self, image):
-        image = np.array(image)
-        image = cv2.Canny(image, 100, 200)
-        image = image[:, :, None]
-        image = np.concatenate([image, image, image], axis=2)
-        return Image.fromarray(image)
-
-        
 
 
 
@@ -328,7 +283,7 @@ class Predictor(BasePredictor):
             description="Number of denoising steps", ge=1, le=20, default=6
         ),
         guidance_scale: float = Input(
-            description="Scale for classifier-free guidance", ge=1, le=20, default=2.0
+            description="Scale for classifier-free guidance", ge=1, le=20, default=1.0
         ),
         prompt_strength: float = Input(
             description="Prompt strength when using img2img / inpaint. 1.0 corresponds to full destruction of information in image",
@@ -341,7 +296,7 @@ class Predictor(BasePredictor):
         ),
         apply_watermark: bool = Input(
             description="Applies a watermark to enable determining if an image is generated in downstream applications. If you have other provisions for generating or deploying images safely, you can use this to disable watermarking.",
-            default=True,
+            default=False,
         ),
         lora_scale: float = Input(
             description="LoRA additive scale. Only applicable on trained models.",
@@ -351,7 +306,7 @@ class Predictor(BasePredictor):
         ),
         condition_scale: float = Input(
             description="The bigger this number is, the more ControlNet interferes",
-            default=0.5,
+            default=0.9,
             ge=0.0,
             le=1.0,
         ),
@@ -365,7 +320,7 @@ class Predictor(BasePredictor):
         ),
         disable_safety_checker: bool = Input(
             description="Disable safety checker for generated images. This feature is only available through the API. See [https://replicate.com/docs/how-does-replicate-work#safety](https://replicate.com/docs/how-does-replicate-work#safety)",
-            default=False
+            default=True
         )
     ) -> List[Path]:
         """Run a single prediction on the model."""
@@ -383,10 +338,6 @@ class Predictor(BasePredictor):
                 self.load_trained_weights(replicate_weights, self.controlnet_pipe)
             else:
                 self.load_trained_weights(replicate_weights, self.txt2img_pipe)
-        
-        # OOMs can leave vae in bad state
-        if self.txt2img_pipe.vae.dtype == torch.float32:
-            self.txt2img_pipe.vae.to(dtype=torch.float16)
 
         sdxl_kwargs = {}
         if self.tuned_model:
@@ -394,45 +345,26 @@ class Predictor(BasePredictor):
             for k, v in self.token_map.items():
                 prompt = prompt.replace(k, v)
         print(f"Prompt: {prompt}")
-        if image and mask:
-            print("inpainting mode")
+        if controlnet_image:
+            openpose_image = self.openpose(self.load_image(controlnet_image))
+            openpose_image.resize((width, height))
+            openpose_image.save('openpose.jpg')
+        
+        if image and mask and controlnet_image:
+            print("controlnet inpaint mode!")
+            
             sdxl_kwargs["image"] = self.load_image(image)
             sdxl_kwargs["mask_image"] = self.load_image(mask)
             sdxl_kwargs["strength"] = prompt_strength
-            sdxl_kwargs["width"] = width
-            sdxl_kwargs["height"] = height
-            pipe = self.inpaint_pipe
-        elif image and controlnet_image:
-            sdxl_kwargs["image"] = self.load_image(image)
-            sdxl_kwargs["control_image"] = self.openpose(self.load_image(controlnet_image))
+            sdxl_kwargs["control_image"] = openpose_image
             sdxl_kwargs["controlnet_conditioning_scale"] = condition_scale
             sdxl_kwargs["width"] = width
             sdxl_kwargs["height"] = height
             pipe = self.controlnet_pipe
-        elif image:
-            print("img2img mode")
-            sdxl_kwargs["image"] = self.load_image(image)
-            sdxl_kwargs["strength"] = prompt_strength
-            pipe = self.img2img_pipe
-        elif controlnet_image:
-            sdxl_kwargs["control_image"] = [self.openpose(self.load_image(controlnet_image)).resize((width, height))]
-            print(controlnet_image)
-            print(self.load_image(controlnet_image))
-            print(self.openpose(self.load_image(controlnet_image)))
 
-            
-            sdxl_kwargs["controlnet_conditioning_scale"] = condition_scale
-            sdxl_kwargs["width"] = width
-            sdxl_kwargs["height"] = height
-            print('before controlnet pipe')
-            pipe = self.controlnet_pipe
-            print('after controlnet pipe')
         else:
-            print("txt2img mode")
-            sdxl_kwargs["width"] = width
-            sdxl_kwargs["height"] = height
-            pipe = self.txt2img_pipe
-
+            print('ERROR!')
+        
         if not apply_watermark:
             # toggles watermark for this prediction
             watermark_cache = pipe.watermark

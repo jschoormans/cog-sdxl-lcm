@@ -28,6 +28,11 @@ cog run -p 5000 python -m cog.server.http
 ```
 
 
-sudo cog predict -i prompt="a photo of TOK" -i controlnet_image=@person.jpg -i image=@person.jpg 
+sudo cog predict -i prompt="a photo of TOK" -i controlnet_image=@image.jpg -i image=@image.jpg -i mask=@mask.jpg
+
+sudo cog predict -i prompt="a man wearing a TOK sweater" -i controlnet_image=@image.jpg -i image=@image.jpg -i mask=@mask.jpg -i prompt_strength=1.0 -i replicate_weights=https://replicate.delivery/pbxt/97WFj7UpFVofFSAmn3Ztt3CEM4rWG1lfds7kSKofv2N820UkA/trained_model.tar
+
 
 ! The pipeline cant have no normale image but a controlnet image!
+
+sudo cog push r8.im/jschoormans/sdxl-lcm-openpose
