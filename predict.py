@@ -9,6 +9,7 @@ import subprocess
 import numpy as np
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from weights import WeightsDownloadCache
+from controlnet_aux import OpenposeDetector
 from diffusers import (
     DDIMScheduler,
     DiffusionPipeline,
@@ -160,6 +161,14 @@ class Predictor(BasePredictor):
         """Load the model into memory to make running multiple predictions efficient"""
 
         start = time.time()
+        
+        self.openpose = OpenposeDetector.from_pretrained(
+            CONTROL_NAME,
+            cache_dir=CONTROL_CACHE,
+        )
+
+        
+        
         self.tuned_model = False
         self.tuned_weights = None
         if str(weights) == "weights":
@@ -256,6 +265,10 @@ class Predictor(BasePredictor):
         image = image[:, :, None]
         image = np.concatenate([image, image, image], axis=2)
         return Image.fromarray(image)
+
+        
+
+
 
     @torch.inference_mode()
     def predict(
@@ -383,7 +396,7 @@ class Predictor(BasePredictor):
             pipe = self.inpaint_pipe
         elif image and controlnet_image:
             sdxl_kwargs["image"] = self.load_image(image)
-            sdxl_kwargs["control_image"] = self.image2canny(self.load_image(controlnet_image))
+            sdxl_kwargs["control_image"] = self.openpose(self.load_image(controlnet_image))
             sdxl_kwargs["controlnet_conditioning_scale"] = condition_scale
             sdxl_kwargs["width"] = width
             sdxl_kwargs["height"] = height
@@ -394,7 +407,7 @@ class Predictor(BasePredictor):
             sdxl_kwargs["strength"] = prompt_strength
             pipe = self.img2img_pipe
         elif controlnet_image:
-            sdxl_kwargs["control_image"] = self.image2canny(self.load_image(controlnet_image))
+            sdxl_kwargs["control_image"] = self.openpose(self.load_image(controlnet_image))
             sdxl_kwargs["controlnet_conditioning_scale"] = condition_scale
             sdxl_kwargs["width"] = width
             sdxl_kwargs["height"] = height
