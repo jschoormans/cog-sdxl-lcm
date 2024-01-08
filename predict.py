@@ -45,6 +45,8 @@ SDXL_URL = "https://weights.replicate.delivery/default/sdxl/sdxl-vae-upcast-fix.
 SAFETY_URL = "https://weights.replicate.delivery/default/sdxl/safety-1.0.tar"
 CONTROL_NAME="lllyasviel/ControlNet"
 
+USE_IP_ADAPTER=True
+
 class KarrasDPM:
     def from_config(config):
         return DPMSolverMultistepScheduler.from_config(config, use_karras_sigmas=True)
@@ -187,8 +189,6 @@ class Predictor(BasePredictor):
             download_weights(SDXL_URL, SDXL_MODEL_CACHE)
 
         self.is_lora = False
-        if weights or os.path.exists("./trained-model"):
-            self.load_trained_weights(weights, self.txt2img_pipe)
         
         print("Loading SDXL Controlnet pipeline...")
         controlnet = ControlNetModel.from_pretrained(
@@ -213,6 +213,12 @@ class Predictor(BasePredictor):
         # )
         self.controlnet_pipe.load_lora_weights("latent-consistency/lcm-lora-sdxl", cache_dir=LCM_CACHE)
         self.controlnet_pipe.fuse_lora()
+
+        # ip adapter
+        if USE_IP_ADAPTER:
+            self.controlnet_pipe.load_ip_adapter("h94/IP-Adapter", subfolder="models", weight_name="ip-adapter_sd15.bin")
+
+        
         self.controlnet_pipe.to("cuda")
         print("setup took: ", time.time() - start)
 
